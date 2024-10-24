@@ -1,0 +1,341 @@
+// Project on Memory Management System for real time using.
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdbool.h>
+
+// Global variables for memory and page size
+int MEMORY_SIZE;
+int PAGE_SIZE;
+
+// Structure for a process
+typedef struct {
+    int id;         // Process ID
+    int size;      // Process size
+    int pages;     // Number of pages required
+    int start_page; // Starting page index
+} Process;
+
+// Memory simulation
+char *memory;
+bool *page_table;
+int last_allocated_page = 0; // For Next Fit
+
+// Function to initialize memory
+void init_memory() {
+    for (int i = 0; i < MEMORY_SIZE / PAGE_SIZE; i++) {
+        page_table[i] = false; // Mark all pages as free
+    }
+}
+
+// Function for First Fit Memory Allocation
+int first_fit(Process p) {
+    int required_pages = (p.size + PAGE_SIZE - 1) / PAGE_SIZE;
+    for (int i = 0; i < MEMORY_SIZE / PAGE_SIZE; i++) {
+        if (!page_table[i]) {
+            // Found a free page
+            bool fit = true;
+            for (int j = i; j < i + required_pages; j++) {
+                if (j >= MEMORY_SIZE / PAGE_SIZE || page_table[j]) {
+                    fit = false;
+                    break;
+                }
+            }
+            if (fit) {
+                for (int j = i; j < i + required_pages; j++) {
+                    page_table[j] = true; // Mark pages as allocated
+                }
+                p.start_page = i; // Set starting page index
+                return i; // Return starting page index
+            }
+        }
+    }
+    return -1; // No suitable space found
+}
+
+// Function for Best Fit Memory Allocation
+int best_fit(Process p) {
+    int required_pages = (p.size + PAGE_SIZE - 1) / PAGE_SIZE;
+    int best_index = -1;
+    int best_size = MEMORY_SIZE; // Initialize to a large number
+
+    for (int i = 0; i < MEMORY_SIZE / PAGE_SIZE; i++) {
+        if (!page_table[i]) {
+            // Found a free page
+            bool fit = true;
+            for (int j = i; j < i + required_pages; j++) {
+                if (j >= MEMORY_SIZE / PAGE_SIZE || page_table[j]) {
+                    fit = false;
+                    break;
+                }
+            }
+            if (fit && required_pages < best_size) {
+                best_size = required_pages;
+                best_index = i; // Track best fit index
+            }
+        }
+    }
+    if (best_index != -1) {
+        for (int j = best_index; j < best_index + required_pages; j++) {
+            page_table[j] = true; // Mark pages as allocated
+        }
+        p.start_page = best_index; // Set starting page index
+    }
+    return best_index; // Return best fit starting page index
+}
+
+// Function for Worst Fit Memory Allocation
+int worst_fit(Process p) {
+    int required_pages = (p.size + PAGE_SIZE - 1) / PAGE_SIZE;
+    int worst_index = -1;
+    int worst_size = -1;
+
+    for (int i = 0; i < MEMORY_SIZE / PAGE_SIZE; i++) {
+        if (!page_table[i]) {
+            // Found a free page
+            bool fit = true;
+            for (int j = i; j < i + required_pages; j++) {
+                if (j >= MEMORY_SIZE / PAGE_SIZE || page_table[j]) {
+                    fit = false;
+                    break;
+                }
+            }
+            if (fit) {
+                int size = 0;
+                for (int j = i; j < MEMORY_SIZE / PAGE_SIZE && !page_table[j]; j++) {
+                    size++;
+                }
+                if (size > worst_size) {
+                    worst_size = size;
+                    worst_index = i; // Track worst fit index
+                }
+            }
+        }
+    }
+    if (worst_index != -1) {
+        for (int j = worst_index; j < worst_index + required_pages; j++) {
+            page_table[j] = true; // Mark pages as allocated
+        }
+        p.start_page = worst_index; // Set starting page index
+    }
+    return worst_index; // Return worst fit starting page index
+}
+
+// Function for Next Fit Memory Allocation
+int next_fit(Process p) {
+    int required_pages = (p.size + PAGE_SIZE - 1) / PAGE_SIZE;
+
+    for (int i = last_allocated_page; i < MEMORY_SIZE / PAGE_SIZE; i++) {
+        if (!page_table[i]) {
+            bool fit = true;
+            for (int j = i; j < i + required_pages; j++) {
+                if (j >= MEMORY_SIZE / PAGE_SIZE || page_table[j]) {
+                    fit = false;
+                    break;
+                }
+            }
+            if (fit) {
+                for (int j = i; j < i + required_pages; j++) {
+                    page_table[j] = true;
+                }
+                last_allocated_page = i; // Update last allocated page
+                p.start_page = i;
+                return i;
+            }
+        }
+    }
+
+    // If no suitable space found, wrap around and search from the beginning
+    for (int i = 0; i < last_allocated_page; i++) {
+        if (!page_table[i]) {
+            bool fit = true;
+            for (int j = i; j < i + required_pages; j++) {
+                if (j >= MEMORY_SIZE / PAGE_SIZE || page_table[j]) {
+                    fit = false;
+                    break;
+                }
+            }
+            if (fit) {
+                for (int j = i; j < i + required_pages; j++) {
+                    page_table[j] = true;
+                }
+                last_allocated_page = i; // Update last allocated page
+                p.start_page = i;
+                return i;
+            }
+        }
+    }
+
+    return -1; // No suitable space found
+}
+
+// Function for Deallocating Memory
+void deallocate(Process p) {
+    for (int i = p.start_page; i < p.start_page + p.pages; i++) {
+        if (i < MEMORY_SIZE / PAGE_SIZE) {
+            page_table[i] = false; // Mark pages as free
+        }
+    }
+    printf("Memory deallocated from process %d starting at page %d\n", p.id, p.start_page);
+}
+
+// Function to print memory status
+void print_memory_status() {
+    printf("\nMemory Status:\n");
+    for (int i = 0; i < MEMORY_SIZE / PAGE_SIZE; i++) {
+        printf("Page %d: %s\n", i, page_table[i] ? "Allocated" : "Free");
+    }
+}
+
+// Function to calculate memory usage statistics
+void print_memory_usage() {
+    int total_allocated = 0;
+    for (int i = 0; i < MEMORY_SIZE / PAGE_SIZE; i++) {
+        if (page_table[i]) {
+            total_allocated++;
+        }
+    }
+    int total_free = (MEMORY_SIZE / PAGE_SIZE) - total_allocated;
+    printf("\nTotal Allocated Pages: %d\n", total_allocated);
+    printf("Total Free Pages: %d\n", total_free);
+}
+
+// Function to display detailed process information
+void display_process_info(Process processes[], int num_processes) {
+    printf("\nProcess Information:\n");
+    for (int i = 0; i < num_processes; i++) {
+        printf("Process ID: %d, Size: %d, Pages: %d, Start Page: %d\n", 
+                processes[i].id, processes[i].size, processes[i].pages, processes[i].start_page);
+    }
+}
+
+// Function to compact memory
+void compact_memory() {
+    int compacted_page = 0;
+    
+    for (int i = 0; i < MEMORY_SIZE / PAGE_SIZE; i++) {
+        if (page_table[i]) {
+            if (compacted_page != i) {
+                // Move process to the new compacted location
+                page_table[compacted_page] = true;
+                page_table[i] = false;
+                compacted_page++;
+            }
+        }
+    }
+    
+    printf("Memory has been compacted.\n");
+}
+
+// Function to calculate fragmentation
+void calculate_fragmentation() {
+    int free_blocks = 0;
+    int current_free_block_size = 0;
+    int total_fragments = 0;
+
+    for (int i = 0; i < MEMORY_SIZE / PAGE_SIZE; i++) {
+        if (!page_table[i]) {
+            current_free_block_size++;
+        } else {
+            if (current_free_block_size > 0) {
+                free_blocks++;
+                total_fragments += current_free_block_size;
+                current_free_block_size = 0;
+            }
+        }
+    }
+
+    // Consider the last block of free pages
+    if (current_free_block_size > 0) {
+        free_blocks++;
+        total_fragments += current_free_block_size;
+    }
+
+    printf("\nTotal Free Blocks: %d\n", free_blocks);
+    printf("Total Fragments: %d\n", total_fragments);
+}
+
+// Function to configure dynamic memory size
+void configure_memory() {
+    printf("Enter total memory size (in bytes): ");
+    scanf("%d", &MEMORY_SIZE);
+    
+    printf("Enter page size (in bytes): ");
+    scanf("%d", &PAGE_SIZE);
+    
+    // Allocate memory and page table dynamically
+    memory = malloc(MEMORY_SIZE);
+    page_table = malloc(MEMORY_SIZE / PAGE_SIZE * sizeof(bool));
+    
+    init_memory();  // Initialize memory
+}
+
+// Main function to run the memory management system
+int main() {
+    configure_memory();
+
+    int num_processes;
+    printf("Enter the number of processes: ");
+    scanf("%d", &num_processes);
+    Process processes[num_processes];
+
+    int allocation_strategy;
+    printf("Choose allocation strategy (1: First Fit, 2: Best Fit, 3: Worst Fit, 4: Next Fit): ");
+    scanf("%d", &allocation_strategy);
+
+    for (int i = 0; i < num_processes; i++) {
+        printf("Enter size for Process %d: ", i + 1);
+        scanf("%d", &processes[i].size);
+        processes[i].id = i + 1;
+        processes[i].pages = (processes[i].size + PAGE_SIZE - 1) / PAGE_SIZE;
+
+        // Memory Allocation based on chosen strategy
+        int index = -1;
+        if (allocation_strategy == 1) {
+            index = first_fit(processes[i]);
+        } else if (allocation_strategy == 2) {
+            index = best_fit(processes[i]);
+        } else if (allocation_strategy == 3) {
+            index = worst_fit(processes[i]);
+        } else if (allocation_strategy == 4) {
+            index = next_fit(processes[i]);
+        } else {
+            printf("Invalid allocation strategy\n");
+            return 1;
+        }
+
+        if (index != -1) {
+            printf("Process %d allocated at page %d\n", processes[i].id, index);
+        } else {
+            printf("Process %d could not be allocated\n", processes[i].id);
+        }
+    }
+
+    // Print memory status and usage
+    print_memory_status();
+    print_memory_usage();
+
+    // Display detailed process info
+    display_process_info(processes, num_processes);
+
+    // Calculate fragmentation
+    calculate_fragmentation();
+
+    // Deallocate a process
+    int process_id_to_free;
+    printf("Enter Process ID to deallocate: ");
+    scanf("%d", &process_id_to_free);
+    for (int i = 0; i < num_processes; i++) {
+        if (processes[i].id == process_id_to_free) {
+            deallocate(processes[i]);
+            break;
+        }
+    }
+
+    // Compact memory
+    compact_memory();
+    print_memory_status();
+    print_memory_usage();
+    
+    return 0;
+}
